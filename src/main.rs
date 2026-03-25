@@ -11,7 +11,7 @@ mod toolbox;
 use hub::Hub;
 use protocol::{JsonRpcRequest, JsonRpcResponse};
 use serde_json::Value;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
@@ -56,9 +56,14 @@ async fn async_main(line_rx: std::sync::mpsc::Receiver<String>) {
         .init();
 
     let base_dir = resolve_base_dir();
-    tracing::info!("omc-hub-rs starting, base_dir={}", base_dir.display());
+    let state_dir = resolve_state_dir(&base_dir);
+    tracing::info!(
+        "omc-hub-rs starting, base_dir={}, state_dir={}",
+        base_dir.display(),
+        state_dir.display()
+    );
 
-    let mut hub = Hub::new(base_dir).await;
+    let mut hub = Hub::new(base_dir, state_dir).await;
 
     // Bridge std::sync::mpsc into tokio
     let (async_tx, mut async_rx) = tokio::sync::mpsc::channel::<String>(64);
@@ -208,4 +213,25 @@ fn resolve_base_dir() -> PathBuf {
         return PathBuf::from(home).join(".omc").join("mcp-hub");
     }
     PathBuf::from(".omc/mcp-hub")
+}
+
+/// Resolve state directory for OMC native tools.
+/// Priority: --state-dir arg > parent of --config > ~/.omc
+fn resolve_state_dir(base_dir: &Path) -> PathBuf {
+    let args: Vec<String> = std::env::args().collect();
+    for i in 0..args.len() {
+        if args[i] == "--state-dir" {
+            if let Some(path) = args.get(i + 1) {
+                return PathBuf::from(path);
+            }
+        }
+    }
+    // Infer from base_dir: ~/.omc/mcp-hub → ~/.omc
+    if let Some(parent) = base_dir.parent() {
+        return parent.to_path_buf();
+    }
+    if let Some(home) = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")) {
+        return PathBuf::from(home).join(".omc");
+    }
+    PathBuf::from(".omc")
 }

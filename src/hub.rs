@@ -54,20 +54,12 @@ pub struct Hub {
 }
 
 impl Hub {
-    pub async fn new(base_dir: PathBuf) -> Self {
+    pub async fn new(base_dir: PathBuf, state_dir: PathBuf) -> Self {
         let skills_dir = base_dir.join("skills");
         let skill_configs = load_skill_configs(&skills_dir).await;
         info!("Loaded {} skill configs", skill_configs.len());
 
-        // Resolve ~/.omc for native tools
-        let omc_dir = if let Some(home) = std::env::var_os("USERPROFILE")
-            .or_else(|| std::env::var_os("HOME"))
-        {
-            PathBuf::from(home).join(".omc")
-        } else {
-            PathBuf::from(".omc")
-        };
-        let omc = OmcTools::new(omc_dir);
+        let omc = OmcTools::new(state_dir);
 
         let mut hub = Self {
             base_dir,

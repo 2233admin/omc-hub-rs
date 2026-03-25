@@ -1,0 +1,126 @@
+name: OMC Sync Check
+
+# Monitor OMC repo for changes that might affect omc-hub-rs compatibility.
+# Runs daily and on manual trigger.
+
+on:
+  schedule:
+    - cron: "0 8 * * *" # Daily at 08:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get OMC latest release info
+        id: omc
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get latest OMC version
+          LATEST=$(gh api repos/Yeachan-Heo/oh-my-claudecode/releases/latest --jq '.tag_name' 2>/dev/null || echo "unknown")
+          echo "version=${LATEST}" >> "$GITHUB_OUTPUT"
+
+          # Get bridge file hash
+          BRIDGE_HASH=$(gh api repos/Yeachan-Heo/oh-my-claudecode/contents/bridge/mcp-server.cjs --jq '.sha' 2>/dev/null || echo "unknown")
+          echo "bridge_hash=${BRIDGE_HASH}" >> "$GITHUB_OUTPUT"
+
+          # Get skills dir listing
+          SKILLS=$(gh api repos/Yeachan-Heo/oh-my-claudecode/contents/skills --jq '.[].name' 2>/dev/null | sort | tr '\n' ',' || echo "unknown")
+          echo "skills=${SKILLS}" >> "$GITHUB_OUTPUT"
+
+      - name: Check against tracked state
+        id: diff
+        run: |
+          TRACK_FILE=".github/omc-tracked.json"
+
+          if [ ! -f "$TRACK_FILE" ]; then
+            echo '{}' > "$TRACK_FILE"
+          fi
+
+          OLD_VER=$(jq -r '.version // "none"' "$TRACK_FILE")
+          OLD_BRIDGE=$(jq -r '.bridge_hash // "none"' "$TRACK_FILE")
+          OLD_SKILLS=$(jq -r '.skills // "none"' "$TRACK_FILE")
+
+          NEW_VER="${{ steps.omc.outputs.version }}"
+          NEW_BRIDGE="${{ steps.omc.outputs.bridge_hash }}"
+          NEW_SKILLS="${{ steps.omc.outputs.skills }}"
+
+          CHANGES=""
+          if [ "$OLD_VER" != "$NEW_VER" ] && [ "$NEW_VER" != "unknown" ]; then
+            CHANGES="${CHANGES}Version: ${OLD_VER} -> ${NEW_VER}; "
+          fi
+          if [ "$OLD_BRIDGE" != "$NEW_BRIDGE" ] && [ "$NEW_BRIDGE" != "unknown" ]; then
+            CHANGES="${CHANGES}Bridge SHA changed; "
+          fi
+          if [ "$OLD_SKILLS" != "$NEW_SKILLS" ] && [ "$NEW_SKILLS" != "unknown" ]; then
+            CHANGES="${CHANGES}Skills changed; "
+          fi
+
+          if [ -n "$CHANGES" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "summary=${CHANGES}" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          # Update tracking file
+          jq -n \
+            --arg ver "$NEW_VER" \
+            --arg bridge "$NEW_BRIDGE" \
+            --arg skills "$NEW_SKILLS" \
+            '{version: $ver, bridge_hash: $bridge, skills: $skills, checked_at: (now | todate)}' \
+            > "$TRACK_FILE"
+
+      - name: Create issue if changed
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CHANGE_SUMMARY: ${{ steps.diff.outputs.summary }}
+        run: |
+          EXISTING=$(gh issue list --label "omc-sync" --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
+
+          BODY=$(cat <<'ISSUE_EOF'
+          OMC upstream has changed. Check compatibility with omc-hub-rs.
+
+          ## Changes detected
+
+          See summary above.
+
+          ## Action required
+
+          1. Run `python scripts/omc-compat-check.py` locally after updating OMC
+          2. If bridge tools changed: verify omc_tools.rs covers new tools
+          3. If skill format changed: verify config.rs parser handles new fields
+          4. If version bumped: test full MCP handshake + tool calls
+          ISSUE_EOF
+          )
+
+          # Prepend summary safely via env var
+          FULL_BODY="**Changes:** ${CHANGE_SUMMARY}
+
+          ${BODY}"
+
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$FULL_BODY"
+          else
+            gh issue create \
+              --title "OMC upstream changed — compatibility check needed" \
+              --body "$FULL_BODY" \
+              --label "omc-sync"
+          fi
+
+      - name: Commit tracking update
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/omc-tracked.json
+          git commit -m "chore: update OMC tracking state" || true
+          git push || true
