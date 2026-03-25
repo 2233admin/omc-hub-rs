@@ -1,0 +1,7 @@
+{
+  "tool_name": "Read",
+  "tool_input_preview": "{\"file_path\":\"/tmp/test-skill-stderr.txt\"}",
+  "error": "File does not exist. Note: your current working directory is D:\\projects\\omc-hub-rs.",
+  "timestamp": "2026-03-25T10:51:01.202Z",
+  "retry_count": 2
+}
