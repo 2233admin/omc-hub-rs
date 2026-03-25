@@ -1,4 +1,4 @@
-# omc-hub-rs
+# omc-Hub-RS
 
 Lightweight MCP hub for Claude Code. Drop-in replacement for [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode)'s `mcp-hub` — a 2.5MB Rust binary that replaces 663MB of bun + haiku subprocess overhead.
 
