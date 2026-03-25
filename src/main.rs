@@ -4,6 +4,7 @@
 mod child;
 mod config;
 mod hub;
+mod omc_tools;
 mod protocol;
 mod toolbox;
 

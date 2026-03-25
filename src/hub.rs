@@ -2,6 +2,7 @@
 
 use crate::child::ChildMcp;
 use crate::config::{load_skill_configs, SkillConfig};
+use crate::omc_tools::OmcTools;
 use crate::protocol::{ToolDef, ToolResult};
 use crate::toolbox::{self, ToolboxEntry};
 use glob_match::glob_match;
@@ -48,6 +49,8 @@ pub struct Hub {
     toolbox: Vec<ToolboxEntry>,
     stats: HashMap<String, ToolStats>,
     stats_dirty: bool,
+    /// OMC native tools (state, notepad, project memory, etc.)
+    omc: OmcTools,
 }
 
 impl Hub {
@@ -55,6 +58,16 @@ impl Hub {
         let skills_dir = base_dir.join("skills");
         let skill_configs = load_skill_configs(&skills_dir).await;
         info!("Loaded {} skill configs", skill_configs.len());
+
+        // Resolve ~/.omc for native tools
+        let omc_dir = if let Some(home) = std::env::var_os("USERPROFILE")
+            .or_else(|| std::env::var_os("HOME"))
+        {
+            PathBuf::from(home).join(".omc")
+        } else {
+            PathBuf::from(".omc")
+        };
+        let omc = OmcTools::new(omc_dir);
 
         let mut hub = Self {
             base_dir,
@@ -64,6 +77,7 @@ impl Hub {
             toolbox: Vec::new(),
             stats: HashMap::new(),
             stats_dirty: false,
+            omc,
         };
         hub.load_stats().await;
         hub.scan_toolbox().await;
@@ -132,6 +146,9 @@ impl Hub {
             });
         }
 
+        // OMC native tools (state, notepad, project memory, trace, ast_grep)
+        tools.extend(self.omc.tool_defs());
+
         tools
     }
 
@@ -174,7 +191,12 @@ impl Hub {
     }
 
     async fn dispatch_tool(&self, name: &str, args: Value) -> ToolResult {
-        // Check global toolbox first
+        // Check OMC native tools first (state, notepad, project memory, etc.)
+        if let Some(result) = self.omc.call(name, args.clone()).await {
+            return result;
+        }
+
+        // Check global toolbox
         if let Some(entry) = self.toolbox.iter().find(|e| e.ns_name == name) {
             return toolbox::execute_script(entry, &args).await;
         }
