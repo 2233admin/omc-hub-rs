@@ -9,7 +9,6 @@ use tokio::process::Command;
 
 #[derive(Debug, Clone)]
 pub struct ToolboxEntry {
-    pub name: String,
     pub ns_name: String,
     pub description: String,
     pub input_schema: Value,
@@ -43,7 +42,6 @@ async fn describe_script(path: &Path, prefix: &str) -> Option<ToolboxEntry> {
     let desc = parse_describe(stdout.trim())?;
     let ns_name = format!("{prefix}__{}", desc.name);
     Some(ToolboxEntry {
-        name: desc.name.clone(),
         ns_name,
         description: desc.description.clone(),
         input_schema: desc.input_schema.clone(),

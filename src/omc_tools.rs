@@ -3,7 +3,7 @@
 
 use crate::protocol::{ToolDef, ToolResult};
 use serde_json::Value;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 pub struct OmcTools {
     omc_dir: PathBuf, // ~/.omc

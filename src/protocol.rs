@@ -7,6 +7,7 @@ use serde_json::Value;
 
 #[derive(Debug, Deserialize)]
 pub struct JsonRpcRequest {
+    #[allow(dead_code)] // wire format: deserialized but not read back
     pub jsonrpc: String,
     pub id: Option<Value>,
     pub method: String,
@@ -47,14 +48,6 @@ impl JsonRpcResponse {
         }
     }
 
-    pub fn notification(method: &str) -> Self {
-        Self {
-            jsonrpc: "2.0".into(),
-            id: None,
-            result: Some(serde_json::json!({ "method": method })),
-            error: None,
-        }
-    }
 }
 
 // ── MCP Tool schema types ────────────────────────
