@@ -73,16 +73,29 @@ pub async fn execute_script(entry: &ToolboxEntry, args: &Value) -> ToolResult {
     }
 }
 
+/// Resolve bash executable: prefer Git Bash on Windows since system PATH rarely has bash.
+fn bash_exe() -> &'static str {
+    if cfg!(windows) {
+        const GIT_BASH: &str = "C:/Program Files/Git/bin/bash.exe";
+        if std::path::Path::new(GIT_BASH).exists() {
+            return GIT_BASH;
+        }
+    }
+    "bash"
+}
+
 async fn run_script(
     path: &Path,
     action: &str,
     args_json: Option<&str>,
 ) -> std::io::Result<std::process::Output> {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    let bash = bash_exe();
+    let path_str = path.to_str().unwrap();
     let (cmd, cmd_args): (&str, Vec<&str>) = match ext {
-        "py" => ("python", vec![path.to_str().unwrap()]),
-        "mjs" | "js" => ("node", vec![path.to_str().unwrap()]),
-        _ => ("bash", vec![path.to_str().unwrap()]),
+        "py" => ("python", vec![path_str]),
+        "mjs" | "js" => ("node", vec![path_str]),
+        _ => (bash, vec![path_str]),
     };
     let mut command = Command::new(cmd);
     command.args(&cmd_args);
