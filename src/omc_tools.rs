@@ -137,7 +137,10 @@ impl OmcTools {
     }
 
     async fn state_write(&self, args: &Value) -> ToolResult {
-        let mode = str_arg(args, "mode");
+        let mode = match args.get("mode").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+            Some(m) => m.to_string(),
+            None => return ToolResult::error("missing required argument: mode"),
+        };
         let path = self.state_path(&mode);
         if let Some(parent) = path.parent() {
             let _ = tokio::fs::create_dir_all(parent).await;
@@ -310,7 +313,10 @@ impl OmcTools {
 
     async fn pm_write(&self, args: &Value) -> ToolResult {
         let merge = args.get("merge").and_then(|m| m.as_bool()).unwrap_or(false);
-        let content = args.get("content").cloned().unwrap_or(Value::Object(Default::default()));
+        let content = match args.get("content") {
+            Some(v) => v.clone(),
+            None => return ToolResult::error("missing required argument: content"),
+        };
         let path = self.pm_path();
 
         let final_val = if merge {
@@ -335,8 +341,14 @@ impl OmcTools {
     }
 
     async fn pm_add_note(&self, args: &Value) -> ToolResult {
-        let category = str_arg(args, "category");
-        let content = str_arg(args, "content");
+        let category = match args.get("category").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+            Some(v) => v.to_string(),
+            None => return ToolResult::error("missing required argument: category"),
+        };
+        let content = match args.get("content").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+            Some(v) => v.to_string(),
+            None => return ToolResult::error("missing required argument: content"),
+        };
         let path = self.pm_path();
         let mut pm: Value = match tokio::fs::read_to_string(&path).await {
             Ok(d) => serde_json::from_str(&d).unwrap_or(Value::Object(Default::default())),
@@ -356,7 +368,10 @@ impl OmcTools {
     }
 
     async fn pm_add_directive(&self, args: &Value) -> ToolResult {
-        let directive = str_arg(args, "directive");
+        let directive = match args.get("directive").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+            Some(v) => v.to_string(),
+            None => return ToolResult::error("missing required argument: directive"),
+        };
         let path = self.pm_path();
         let mut pm: Value = match tokio::fs::read_to_string(&path).await {
             Ok(d) => serde_json::from_str(&d).unwrap_or(Value::Object(Default::default())),
@@ -468,7 +483,10 @@ impl OmcTools {
     async fn ast_grep_replace(&self, args: &Value) -> ToolResult {
         let pattern = str_arg(args, "pattern");
         let rewrite = str_arg(args, "rewrite");
-        let path = args.get("path").and_then(|p| p.as_str()).unwrap_or(".");
+        let path = match args.get("path").and_then(|p| p.as_str()).filter(|s| !s.is_empty()) {
+            Some(p) => p,
+            None => return ToolResult::error("missing required argument: path"),
+        };
         let lang = args.get("lang").and_then(|l| l.as_str());
         let mut cmd = tokio::process::Command::new("sg");
         cmd.arg("run").arg("--pattern").arg(&pattern)

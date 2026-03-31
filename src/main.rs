@@ -166,10 +166,11 @@ async fn handle_message(line: &str, hub: &mut Hub) -> Option<JsonRpcResponse> {
                 .cloned()
                 .unwrap_or(Value::Object(Default::default()));
 
+            let gen_before = hub.tool_generation();
             let result = hub.call_tool(name, args).await;
             hub.flush_stats().await;
 
-            let notify = hub.tools_changed_after(name);
+            let notify = hub.tools_changed_since(gen_before);
             let resp = JsonRpcResponse::success(id, serde_json::to_value(&result).unwrap());
 
             // Send tools/list_changed notification after response

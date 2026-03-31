@@ -51,6 +51,8 @@ pub struct Hub {
     stats_dirty: bool,
     /// OMC native tools (state, notepad, project memory, etc.)
     omc: OmcTools,
+    /// Incremented only when the tool set actually changes (load/unload/reload with effect).
+    tool_generation: u64,
 }
 
 impl Hub {
@@ -70,6 +72,7 @@ impl Hub {
             stats: HashMap::new(),
             stats_dirty: false,
             omc,
+            tool_generation: 0,
         };
         hub.load_stats().await;
         hub.scan_toolbox().await;
@@ -174,12 +177,15 @@ impl Hub {
         result
     }
 
-    /// Returns true if tool list changed (caller should send notification).
-    pub fn tools_changed_after(&self, name: &str) -> bool {
-        matches!(
-            name,
-            "hub_load_skill" | "hub_unload_skill" | "hub_reload_toolbox"
-        )
+    /// Snapshot current generation counter. Call before `call_tool`, then pass result to
+    /// `tools_changed_since` to determine if a `tools/list_changed` notification is needed.
+    pub fn tool_generation(&self) -> u64 {
+        self.tool_generation
+    }
+
+    /// Returns true only if the tool set actually changed since the snapshot was taken.
+    pub fn tools_changed_since(&self, snapshot: u64) -> bool {
+        self.tool_generation != snapshot
     }
 
     async fn dispatch_tool(&self, name: &str, args: Value) -> ToolResult {
@@ -260,14 +266,17 @@ impl Hub {
         };
 
         match self.load_skill(skill_name, &config).await {
-            Ok(tool_names) => ToolResult::text(
-                serde_json::json!({
-                    "loaded": true,
-                    "toolCount": tool_names.len(),
-                    "tools": tool_names,
-                })
-                .to_string(),
-            ),
+            Ok(tool_names) => {
+                self.tool_generation += 1;
+                ToolResult::text(
+                    serde_json::json!({
+                        "loaded": true,
+                        "toolCount": tool_names.len(),
+                        "tools": tool_names,
+                    })
+                    .to_string(),
+                )
+            }
             Err(e) => ToolResult::error(e),
         }
     }
@@ -361,6 +370,7 @@ impl Hub {
             child.close().await;
         }
         info!("Unloaded skill '{skill_name}'");
+        self.tool_generation += 1;
         ToolResult::text(serde_json::json!({"unloaded": true}).to_string())
     }
 
@@ -390,8 +400,13 @@ impl Hub {
     }
 
     async fn handle_reload_toolbox(&mut self) -> ToolResult {
+        let before = self.toolbox.len();
         self.toolbox.clear();
         self.scan_toolbox().await;
+        let after = self.toolbox.len();
+        if before != after {
+            self.tool_generation += 1;
+        }
         let names: Vec<_> = self.toolbox.iter().map(|e| &e.ns_name).collect();
         ToolResult::text(serde_json::json!({"reloaded": true, "tools": names}).to_string())
     }

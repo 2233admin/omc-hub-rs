@@ -253,25 +253,19 @@ fn test_tools_list_changed_notification_after_load() {
     let mut s = McpSession::spawn();
     s.initialize();
 
-    // Load a nonexistent skill — will error, but should still send list_changed notification
-    s.send_raw(&serde_json::to_string(&json!({
+    // Load a nonexistent skill — returns an error; the tool set did NOT change,
+    // so NO tools/list_changed notification should be emitted.
+    let resp = s.rpc(json!({
         "jsonrpc": "2.0", "id": 10, "method": "tools/call",
         "params": {"name": "hub_load_skill", "arguments": {"skill": "nonexistent"}}
-    })).unwrap());
+    }));
+    assert_eq!(resp["id"], 10, "response id must match");
 
-    // Should get TWO lines: the response + the notification
-    let msg1 = s.read_line();
-    let msg2 = s.read_line();
-
-    let (response, notification) = if msg1.get("id").is_some() {
-        (msg1, msg2)
-    } else {
-        (msg2, msg1)
-    };
-
-    assert_eq!(response["id"], 10);
-    assert_eq!(notification["method"], "notifications/tools/list_changed");
-    assert!(notification.get("id").is_none(), "notification must not have id");
+    // If a spurious notification were sent we would see it before the next response.
+    // Verify it was NOT sent by immediately sending a ping and receiving it as the
+    // very next line (no interleaved notification).
+    let ping_resp = s.rpc(json!({"jsonrpc":"2.0","id":11,"method":"ping","params":{}}));
+    assert_eq!(ping_resp["id"], 11, "no notification should be interleaved after a failed load");
 }
 
 #[test]

@@ -91,7 +91,7 @@ async fn run_script(
 ) -> std::io::Result<std::process::Output> {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
     let bash = bash_exe();
-    let path_str = path.to_str().unwrap();
+    let path_str = path.to_str().unwrap_or_default();
     let (cmd, cmd_args): (&str, Vec<&str>) = match ext {
         "py" => ("python", vec![path_str]),
         "mjs" | "js" => ("node", vec![path_str]),
