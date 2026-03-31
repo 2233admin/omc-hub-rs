@@ -101,15 +101,14 @@ impl ChildMcp {
                     if trimmed.is_empty() {
                         continue;
                     }
-                    if let Ok(val) = serde_json::from_str::<Value>(trimmed) {
-                        if let Some(id) = val.get("id").and_then(|v| v.as_u64()) {
+                    if let Ok(val) = serde_json::from_str::<Value>(trimmed)
+                        && let Some(id) = val.get("id").and_then(|v| v.as_u64()) {
                             let mut map = pending_clone.lock().await;
                             if let Some(sender) = map.remove(&id) {
                                 let _ = sender.send(val);
                             }
                         }
                         // Notifications (no id) are silently dropped
-                    }
                 }
             });
 

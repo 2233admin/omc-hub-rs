@@ -116,14 +116,13 @@ async fn run_script(
 /// Parse describe output: try JSON first, fall back to key:value format.
 fn parse_describe(stdout: &str) -> Option<ToolDef> {
     // Try JSON
-    if let Ok(def) = serde_json::from_str::<ToolDef>(stdout) {
-        if !def.name.is_empty() {
+    if let Ok(def) = serde_json::from_str::<ToolDef>(stdout)
+        && !def.name.is_empty() {
             return Some(def);
         }
-    }
     // Try raw JSON with nested structure
-    if let Ok(v) = serde_json::from_str::<Value>(stdout) {
-        if let Some(name) = v.get("name").and_then(|n| n.as_str()) {
+    if let Ok(v) = serde_json::from_str::<Value>(stdout)
+        && let Some(name) = v.get("name").and_then(|n| n.as_str()) {
             return Some(ToolDef {
                 name: name.into(),
                 description: v
@@ -137,7 +136,6 @@ fn parse_describe(stdout: &str) -> Option<ToolDef> {
                     .unwrap_or(serde_json::json!({"type": "object", "properties": {}})),
             });
         }
-    }
     // Fallback: key: value lines
     let mut name = None;
     let mut description = None;

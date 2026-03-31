@@ -186,16 +186,13 @@ impl OmcTools {
         if let Ok(mut entries) = tokio::fs::read_dir(&dir).await {
             while let Ok(Some(entry)) = entries.next_entry().await {
                 let name = entry.file_name().to_string_lossy().to_string();
-                if name.ends_with("-state.json") {
-                    if let Ok(data) = tokio::fs::read_to_string(entry.path()).await {
-                        if let Ok(v) = serde_json::from_str::<Value>(&data) {
-                            if v.get("active").and_then(|a| a.as_bool()).unwrap_or(false) {
+                if name.ends_with("-state.json")
+                    && let Ok(data) = tokio::fs::read_to_string(entry.path()).await
+                        && let Ok(v) = serde_json::from_str::<Value>(&data)
+                            && v.get("active").and_then(|a| a.as_bool()).unwrap_or(false) {
                                 let mode = name.trim_end_matches("-state.json");
                                 active.push(mode.to_string());
                             }
-                        }
-                    }
-                }
             }
         }
         ToolResult::text(serde_json::json!({"activeModes": active}).to_string())
@@ -404,15 +401,13 @@ impl OmcTools {
         if let Ok(mut rd) = tokio::fs::read_dir(&dir).await {
             while let Ok(Some(entry)) = rd.next_entry().await {
                 let name = entry.file_name().to_string_lossy().to_string();
-                if name.starts_with("agent-replay-") && name.ends_with(".jsonl") {
-                    if session_id.is_none() || name.contains(session_id.unwrap_or("")) {
-                        if let Ok(data) = tokio::fs::read_to_string(entry.path()).await {
-                            let limit = args.get("limit").and_then(|l| l.as_u64()).unwrap_or(50) as usize;
-                            for line in data.lines().take(limit) {
-                                entries.push(line.to_string());
-                            }
+                if name.starts_with("agent-replay-") && name.ends_with(".jsonl")
+                    && (session_id.is_none() || name.contains(session_id.unwrap_or("")))
+                    && let Ok(data) = tokio::fs::read_to_string(entry.path()).await {
+                        let limit = args.get("limit").and_then(|l| l.as_u64()).unwrap_or(50) as usize;
+                        for line in data.lines().take(limit) {
+                            entries.push(line.to_string());
                         }
-                    }
                 }
             }
         }
@@ -443,9 +438,9 @@ impl OmcTools {
             while let Ok(Some(entry)) = entries.next_entry().await {
                 if results.len() >= limit { break; }
                 let path = entry.path();
-                if path.extension().is_some_and(|e| e == "json" || e == "md") {
-                    if let Ok(data) = tokio::fs::read_to_string(&path).await {
-                        if data.to_lowercase().contains(&query) {
+                if path.extension().is_some_and(|e| e == "json" || e == "md")
+                    && let Ok(data) = tokio::fs::read_to_string(&path).await
+                        && data.to_lowercase().contains(&query) {
                             results.push(serde_json::json!({
                                 "file": path.file_name().unwrap().to_string_lossy(),
                                 "snippet": data.to_lowercase()
@@ -458,8 +453,6 @@ impl OmcTools {
                                     .unwrap_or_default(),
                             }));
                         }
-                    }
-                }
             }
         }
         ToolResult::text(serde_json::to_string_pretty(&results).unwrap_or("[]".into()))

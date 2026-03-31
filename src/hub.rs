@@ -231,11 +231,10 @@ impl Hub {
                             return ToolResult::error(err.to_string());
                         }
                         // Raw response (HTTP transports may return result directly)
-                        if resp.get("content").is_some() {
-                            if let Ok(tr) = serde_json::from_value::<ToolResult>(resp.clone()) {
+                        if resp.get("content").is_some()
+                            && let Ok(tr) = serde_json::from_value::<ToolResult>(resp.clone()) {
                                 return tr;
                             }
-                        }
                         ToolResult::text(resp.to_string())
                     }
                     Err(e) => ToolResult::error(format!("Skill {skill_name} error: {e}")),
@@ -290,7 +289,7 @@ impl Hub {
         let mut tools = HashMap::new();
 
         // Connect MCP servers
-        for (_server_name, mcp_config) in &config.mcp_servers {
+        for mcp_config in config.mcp_servers.values() {
             let child_idx = children.len();
             let child = ChildMcp::connect(mcp_config).await?;
             let child_tools = child.list_tools().await?;
@@ -440,11 +439,10 @@ impl Hub {
 
     async fn load_stats(&mut self) {
         let path = self.base_dir.join("stats.json");
-        if let Ok(data) = tokio::fs::read_to_string(&path).await {
-            if let Ok(s) = serde_json::from_str(&data) {
+        if let Ok(data) = tokio::fs::read_to_string(&path).await
+            && let Ok(s) = serde_json::from_str(&data) {
                 self.stats = s;
             }
-        }
     }
 
     pub async fn flush_stats(&mut self) {

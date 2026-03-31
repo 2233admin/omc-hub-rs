@@ -58,20 +58,18 @@ pub async fn load_skill_configs(skills_dir: &Path) -> HashMap<String, SkillConfi
         if let Some(ft) = file_type {
             if ft.is_file() && path.extension().is_some_and(|e| e == "json") {
                 let name = path.file_stem().unwrap().to_string_lossy().into_owned();
-                if let Ok(data) = tokio::fs::read_to_string(&path).await {
-                    if let Ok(cfg) = serde_json::from_str::<SkillConfig>(&data) {
+                if let Ok(data) = tokio::fs::read_to_string(&path).await
+                    && let Ok(cfg) = serde_json::from_str::<SkillConfig>(&data) {
                         configs.insert(name, cfg);
                     }
-                }
             } else if ft.is_dir() {
                 let name = path.file_name().unwrap().to_string_lossy().into_owned();
                 let skill_json = path.join("skill.json");
-                if let Ok(data) = tokio::fs::read_to_string(&skill_json).await {
-                    if let Ok(mut cfg) = serde_json::from_str::<SkillConfig>(&data) {
+                if let Ok(data) = tokio::fs::read_to_string(&skill_json).await
+                    && let Ok(mut cfg) = serde_json::from_str::<SkillConfig>(&data) {
                         cfg.skill_dir = Some(path);
                         configs.insert(name, cfg);
                     }
-                }
             }
         }
     }

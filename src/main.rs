@@ -129,9 +129,7 @@ async fn handle_message(line: &str, hub: &mut Hub) -> Option<JsonRpcResponse> {
         }
     };
 
-    if req.id.is_none() {
-        return None;
-    }
+    req.id.as_ref()?;
 
     let id = req.id.clone();
 
@@ -204,11 +202,10 @@ async fn handle_message(line: &str, hub: &mut Hub) -> Option<JsonRpcResponse> {
 fn resolve_base_dir() -> PathBuf {
     let args: Vec<String> = std::env::args().collect();
     for i in 0..args.len() {
-        if args[i] == "--config" {
-            if let Some(path) = args.get(i + 1) {
+        if args[i] == "--config"
+            && let Some(path) = args.get(i + 1) {
                 return PathBuf::from(path);
             }
-        }
     }
     if let Some(home) = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")) {
         return PathBuf::from(home).join(".omc").join("mcp-hub");
@@ -221,11 +218,10 @@ fn resolve_base_dir() -> PathBuf {
 fn resolve_state_dir(base_dir: &Path) -> PathBuf {
     let args: Vec<String> = std::env::args().collect();
     for i in 0..args.len() {
-        if args[i] == "--state-dir" {
-            if let Some(path) = args.get(i + 1) {
+        if args[i] == "--state-dir"
+            && let Some(path) = args.get(i + 1) {
                 return PathBuf::from(path);
             }
-        }
     }
     // Infer from base_dir: ~/.omc/mcp-hub → ~/.omc
     if let Some(parent) = base_dir.parent() {
