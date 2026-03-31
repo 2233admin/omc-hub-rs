@@ -39,6 +39,13 @@ impl ChildMcp {
     /// Connect to a child MCP server, perform initialize handshake.
     pub async fn connect(config: &McpServerConfig) -> Result<Self, String> {
         if config.is_http() {
+            // TODO: SSE (Server-Sent Events) transport is declared in config schema but not yet
+            // implemented. Configs with `"type": "sse"` currently fall through to the same
+            // streamable-http POST path, which will likely fail. Full SSE support (persistent
+            // event stream + request/response multiplexing) is tracked for a future release.
+            if config.transport_type.as_deref() == Some("sse") {
+                return Err("SSE transport is not yet implemented. Use \"streamable-http\" instead.".to_string());
+            }
             let url = config.url.as_deref().ok_or("HTTP transport requires url")?;
             Ok(ChildMcp::Http(HttpChild {
                 url: url.to_string(),
