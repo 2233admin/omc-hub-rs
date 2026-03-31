@@ -28,7 +28,7 @@ The haiku subprocess uses a **full Claude instance** (438MB) to match user input
                     Before                          After
               ┌─────────────────┐           ┌─────────────────┐
               │   bun (hub.mjs) │ 225 MB    │                 │
-              │   skill proxy   │           │  omc-hub-rs     │ ~10 MB
+              │   skill proxy   │           │  omc-hub-rs     │ 7.4 MB
               ├─────────────────┤           │  26 tools       │
               │ claude.exe      │ 438 MB    │  2.5 MB binary  │
               │ haiku subprocess│           │                 │
@@ -41,11 +41,32 @@ The haiku subprocess uses a **full Claude instance** (438MB) to match user input
 
 | Component | Before | After | Savings |
 |-----------|--------|-------|---------|
-| Hub + skill proxy | 225 MB (bun) | ~10 MB (Rust) | 95.5% |
+| Hub + skill proxy | 225 MB (bun) | 7.4 MB (Rust, measured) | 95.5% |
 | Skill matcher | 438 MB (haiku LLM) | 0 MB (HashMap) | 100% |
 | OMC native tools (20) | in node bridge | in Rust hub | moved |
 | Node bridge | 33 tools | 13 tools (LSP only) | 60% fewer |
 | Binary size | ~50 MB (node_modules) | 2.5 MB | 95% |
+
+## Memory Benchmark
+
+Measured on Windows 11 (Ryzen 9800X3D), idle after startup, no child MCP servers loaded:
+
+| Process | Working Set (RSS) |
+|---------|-------------------|
+| `node hub.mjs` (OMC default) | **84.5 MB** |
+| `omc-hub.exe` (this project) | **7.4 MB** |
+| **Reduction** | **11.4x less** |
+
+```powershell
+# Reproduce
+$n = Start-Process node -ArgumentList "$env:USERPROFILE/.omc/mcp-hub/hub.mjs" -PassThru -WindowStyle Hidden
+Start-Sleep 4; (Get-Process -Id $n.Id).WorkingSet64 / 1MB
+Stop-Process -Id $n.Id -Force
+
+$r = Start-Process "omc-hub.exe" -PassThru -WindowStyle Hidden
+Start-Sleep 4; (Get-Process -Id $r.Id).WorkingSet64 / 1MB
+Stop-Process -Id $r.Id -Force
+```
 
 ## 26 Tools Included
 
@@ -122,7 +143,7 @@ Claude Code session
     |-- "omc-mcp-hub" (settings.json)
     |       |
     |       v
-    |   omc-hub-rs (2.5MB Rust binary, ~10MB runtime)
+    |   omc-hub-rs (2.5MB Rust binary, 7.4MB runtime (measured))
     |       |-- MCP JSON-RPC 2.0 stdio server
     |       |-- Skill config loader (skills/*.json, lazy-load)
     |       |-- Child MCP proxy (stdio + HTTP transports)
@@ -156,7 +177,7 @@ Claude Code session
 | Skill load error handling | PASS |
 | ping / heartbeat | PASS |
 | Unknown method error (-32601) | PASS |
-| Memory < 10MB runtime | PASS |
+| Memory 7.4 MB runtime (measured) | PASS |
 | Binary < 3MB | PASS |
 
 ## Related
@@ -194,7 +215,7 @@ haiku 子进程用了一个**完整的 Claude 实例**（438MB）来匹配 ~50 �
 
 | 组件 | 替换前 | 替换后 | 节省 |
 |------|--------|--------|------|
-| Hub + skill 代理 | 225 MB (bun) | ~10 MB (Rust) | 95.5% |
+| Hub + skill 代理 | 225 MB (bun) | 7.4 MB (Rust, measured) | 95.5% |
 | Skill 匹配器 | 438 MB (haiku LLM) | 0 MB (HashMap) | 100% |
 | OMC 原生工具 (20个) | 在 node bridge 里 | 在 Rust hub 里 | 迁移 |
 | Node bridge | 33 工具 | 13 工具 (仅LSP) | 少 60% |
