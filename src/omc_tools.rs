@@ -48,9 +48,6 @@ impl OmcTools {
             tool("notepad_write_manual", "Add entry to MANUAL section (never auto-pruned).", json_obj(&[
                 ("content", "string", "Content to add", true),
             ])),
-            tool("notepad_prune", "Prune Working Memory entries older than N days.", json_obj(&[
-                ("days", "number", "Days to keep (default: 7)", false),
-            ])),
             tool("notepad_stats", "Get notepad statistics (size, entry count).", json_obj(&[])),
             // ── Project Memory tools ──
             tool("project_memory_read", "Read project memory. Full or specific section.", json_obj(&[
@@ -106,7 +103,6 @@ impl OmcTools {
             "notepad_write_priority" => Some(self.notepad_write_priority(&args).await),
             "notepad_write_working" => Some(self.notepad_write_working(&args).await),
             "notepad_write_manual" => Some(self.notepad_write_manual(&args).await),
-            "notepad_prune" => Some(self.notepad_prune(&args).await),
             "notepad_stats" => Some(self.notepad_stats().await),
             "project_memory_read" => Some(self.pm_read(&args).await),
             "project_memory_write" => Some(self.pm_write(&args).await),
@@ -123,12 +119,22 @@ impl OmcTools {
 
     // ── State ────────────────────────────────────────
 
+    fn validate_mode(mode: &str) -> Result<(), ToolResult> {
+        if mode.is_empty() || mode.contains('/') || mode.contains('\\') || mode.contains("..") {
+            return Err(ToolResult::error(format!(
+                "invalid mode name '{mode}': must not be empty or contain '/', '\\\\', or '..'"
+            )));
+        }
+        Ok(())
+    }
+
     fn state_path(&self, mode: &str) -> PathBuf {
         self.omc_dir.join("state").join(format!("{mode}-state.json"))
     }
 
     async fn state_read(&self, args: &Value) -> ToolResult {
         let mode = str_arg(args, "mode");
+        if let Err(e) = Self::validate_mode(&mode) { return e; }
         let path = self.state_path(&mode);
         match tokio::fs::read_to_string(&path).await {
             Ok(data) => ToolResult::text(data),
@@ -141,6 +147,7 @@ impl OmcTools {
             Some(m) => m.to_string(),
             None => return ToolResult::error("missing required argument: mode"),
         };
+        if let Err(e) = Self::validate_mode(&mode) { return e; }
         let path = self.state_path(&mode);
         if let Some(parent) = path.parent() {
             let _ = tokio::fs::create_dir_all(parent).await;
@@ -150,6 +157,9 @@ impl OmcTools {
             Ok(d) => serde_json::from_str(&d).unwrap_or(Value::Object(Default::default())),
             Err(_) => Value::Object(Default::default()),
         };
+        if !existing.is_object() {
+            existing = Value::Object(Default::default());
+        }
         let obj = existing.as_object_mut().unwrap();
         // Merge top-level fields from args
         for key in &["active", "current_phase", "iteration", "max_iterations"] {
@@ -165,7 +175,12 @@ impl OmcTools {
                 obj.insert(k.clone(), v.clone());
             }
         }
-        match tokio::fs::write(&path, serde_json::to_string_pretty(&existing).unwrap()).await {
+        let content = serde_json::to_string_pretty(&existing).unwrap();
+        let tmp = path.with_extension("tmp");
+        if let Err(e) = tokio::fs::write(&tmp, &content).await {
+            return ToolResult::error(format!("Write failed: {e}"));
+        }
+        match tokio::fs::rename(&tmp, &path).await {
             Ok(_) => ToolResult::text(format!("State written for mode '{mode}'")),
             Err(e) => ToolResult::error(format!("Write failed: {e}")),
         }
@@ -173,6 +188,7 @@ impl OmcTools {
 
     async fn state_clear(&self, args: &Value) -> ToolResult {
         let mode = str_arg(args, "mode");
+        if let Err(e) = Self::validate_mode(&mode) { return e; }
         let path = self.state_path(&mode);
         match tokio::fs::remove_file(&path).await {
             Ok(_) => ToolResult::text(format!("State cleared for '{mode}'")),
@@ -200,7 +216,8 @@ impl OmcTools {
 
     async fn state_get_status(&self, args: &Value) -> ToolResult {
         let mode = args.get("mode").and_then(|m| m.as_str());
-        if mode.is_some() {
+        if let Some(m) = mode {
+            if let Err(e) = Self::validate_mode(m) { return e; }
             return self.state_read(args).await;
         }
         // All modes
@@ -268,16 +285,14 @@ impl OmcTools {
         } else {
             full.push_str(&format!("\n{marker}\n{content}\n"));
         }
-        match tokio::fs::write(&path, &full).await {
+        let tmp = path.with_extension("tmp");
+        if let Err(e) = tokio::fs::write(&tmp, &full).await {
+            return ToolResult::error(format!("Write failed: {e}"));
+        }
+        match tokio::fs::rename(&tmp, &path).await {
             Ok(_) => ToolResult::text(format!("Notepad {section} updated")),
             Err(e) => ToolResult::error(format!("Write failed: {e}")),
         }
-    }
-
-    async fn notepad_prune(&self, args: &Value) -> ToolResult {
-        let _days = args.get("days").and_then(|d| d.as_u64()).unwrap_or(7);
-        // Simple prune: just report, actual date parsing is complex
-        ToolResult::text("Prune not yet implemented in Rust hub — use OMC bridge for now")
     }
 
     async fn notepad_stats(&self) -> ToolResult {
@@ -331,7 +346,12 @@ impl OmcTools {
             content
         };
 
-        match tokio::fs::write(&path, serde_json::to_string_pretty(&final_val).unwrap()).await {
+        let content = serde_json::to_string_pretty(&final_val).unwrap();
+        let tmp = path.with_extension("tmp");
+        if let Err(e) = tokio::fs::write(&tmp, &content).await {
+            return ToolResult::error(format!("Write failed: {e}"));
+        }
+        match tokio::fs::rename(&tmp, &path).await {
             Ok(_) => ToolResult::text("Project memory updated"),
             Err(e) => ToolResult::error(format!("Write failed: {e}")),
         }
@@ -351,6 +371,9 @@ impl OmcTools {
             Ok(d) => serde_json::from_str(&d).unwrap_or(Value::Object(Default::default())),
             Err(_) => Value::Object(Default::default()),
         };
+        if !pm.is_object() {
+            pm = Value::Object(Default::default());
+        }
         let notes = pm.as_object_mut().unwrap()
             .entry("notes").or_insert(Value::Array(vec![]));
         if let Some(arr) = notes.as_array_mut() {
@@ -360,8 +383,15 @@ impl OmcTools {
                 "addedAt": chrono::Local::now().to_rfc3339(),
             }));
         }
-        let _ = tokio::fs::write(&path, serde_json::to_string_pretty(&pm).unwrap()).await;
-        ToolResult::text(format!("Note added to category '{category}'"))
+        let serialized = serde_json::to_string_pretty(&pm).unwrap();
+        let tmp = path.with_extension("tmp");
+        if let Err(e) = tokio::fs::write(&tmp, &serialized).await {
+            return ToolResult::error(format!("Write failed: {e}"));
+        }
+        match tokio::fs::rename(&tmp, &path).await {
+            Ok(_) => ToolResult::text(format!("Note added to category '{category}'")),
+            Err(e) => ToolResult::error(format!("Write failed: {e}")),
+        }
     }
 
     async fn pm_add_directive(&self, args: &Value) -> ToolResult {
@@ -374,6 +404,9 @@ impl OmcTools {
             Ok(d) => serde_json::from_str(&d).unwrap_or(Value::Object(Default::default())),
             Err(_) => Value::Object(Default::default()),
         };
+        if !pm.is_object() {
+            pm = Value::Object(Default::default());
+        }
         let directives = pm.as_object_mut().unwrap()
             .entry("directives").or_insert(Value::Array(vec![]));
         if let Some(arr) = directives.as_array_mut() {
@@ -382,8 +415,15 @@ impl OmcTools {
                 "addedAt": chrono::Local::now().to_rfc3339(),
             }));
         }
-        let _ = tokio::fs::write(&path, serde_json::to_string_pretty(&pm).unwrap()).await;
-        ToolResult::text("Directive added")
+        let serialized = serde_json::to_string_pretty(&pm).unwrap();
+        let tmp = path.with_extension("tmp");
+        if let Err(e) = tokio::fs::write(&tmp, &serialized).await {
+            return ToolResult::error(format!("Write failed: {e}"));
+        }
+        match tokio::fs::rename(&tmp, &path).await {
+            Ok(_) => ToolResult::text("Directive added"),
+            Err(e) => ToolResult::error(format!("Write failed: {e}")),
+        }
     }
 
     // ── Trace ────────────────────────────────────────
@@ -392,17 +432,12 @@ impl OmcTools {
         let session_id = args.get("session_id").and_then(|s| s.as_str());
         // Look for trace files in state directory
         let dir = self.omc_dir.join("state");
-        let _pattern = if let Some(sid) = session_id {
-            format!("agent-replay-{sid}.jsonl")
-        } else {
-            "agent-replay-*.jsonl".to_string()
-        };
         let mut entries = Vec::new();
         if let Ok(mut rd) = tokio::fs::read_dir(&dir).await {
             while let Ok(Some(entry)) = rd.next_entry().await {
                 let name = entry.file_name().to_string_lossy().to_string();
                 if name.starts_with("agent-replay-") && name.ends_with(".jsonl")
-                    && (session_id.is_none() || name.contains(session_id.unwrap_or("")))
+                    && (session_id.is_none() || name == format!("agent-replay-{}.jsonl", session_id.unwrap()))
                     && let Ok(data) = tokio::fs::read_to_string(entry.path()).await {
                         let limit = args.get("limit").and_then(|l| l.as_u64()).unwrap_or(50) as usize;
                         for line in data.lines().take(limit) {
@@ -420,9 +455,9 @@ impl OmcTools {
 
     async fn trace_summary(&self, args: &Value) -> ToolResult {
         let tl = self.trace_timeline(args).await;
-        // Simple summary: count entries
+        // Count entries by parsing as JSON array
         let text = &tl.content[0].text;
-        let count = text.matches('{').count();
+        let count = serde_json::from_str::<Vec<Value>>(text).map(|v| v.len()).unwrap_or(0);
         ToolResult::text(format!("{{\"totalEvents\": {count}}}"))
     }
 

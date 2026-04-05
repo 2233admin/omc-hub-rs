@@ -200,6 +200,7 @@ async fn handle_message(line: &str, hub: &mut Hub) -> Option<JsonRpcResponse> {
 }
 
 fn resolve_base_dir() -> PathBuf {
+    // TODO: --session-id for skill set persistence across restarts (see harness audit P1-4)
     let args: Vec<String> = std::env::args().collect();
     for i in 0..args.len() {
         if args[i] == "--config"
