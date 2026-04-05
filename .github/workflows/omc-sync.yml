@@ -86,34 +86,29 @@ jobs:
         run: |
           EXISTING=$(gh issue list --label "omc-sync" --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
 
-          BODY=$(cat <<'ISSUE_EOF'
-          OMC upstream has changed. Check compatibility with omc-hub-rs.
+          BODY="OMC upstream has changed. Check compatibility with omc-hub-rs.
 
           ## Changes detected
 
-          See summary above.
+          **${CHANGE_SUMMARY}**
 
           ## Action required
 
-          1. Run `python scripts/omc-compat-check.py` locally after updating OMC
+          1. Run \`python scripts/omc-compat-check.py\` locally after updating OMC
           2. If bridge tools changed: verify omc_tools.rs covers new tools
           3. If skill format changed: verify config.rs parser handles new fields
-          4. If version bumped: test full MCP handshake + tool calls
-          ISSUE_EOF
-          )
-
-          # Prepend summary safely via env var
-          FULL_BODY="**Changes:** ${CHANGE_SUMMARY}
-
-          ${BODY}"
+          4. If version bumped: test full MCP handshake + tool calls"
 
           if [ -n "$EXISTING" ]; then
-            gh issue comment "$EXISTING" --body "$FULL_BODY"
+            gh issue comment "$EXISTING" --body "$BODY"
           else
             gh issue create \
-              --title "OMC upstream changed — compatibility check needed" \
-              --body "$FULL_BODY" \
-              --label "omc-sync"
+              --title "OMC upstream changed -- compatibility check needed" \
+              --body "$BODY" \
+              --label "omc-sync" 2>/dev/null || \
+            gh issue create \
+              --title "OMC upstream changed -- compatibility check needed" \
+              --body "$BODY"
           fi
 
       - name: Commit tracking update
