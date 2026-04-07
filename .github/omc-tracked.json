@@ -1,6 +1,6 @@
 {
-  "version": "v4.10.2",
+  "version": "v4.11.0",
   "bridge_hash": "7d860004364cf9d77435fac185957493ed464172",
-  "skills": "AGENTS.md,ai-slop-cleaner,ask,autopilot,cancel,ccg,configure-notifications,debug,deep-dive,deep-interview,deepinit,external-context,hud,learner,mcp-setup,omc-doctor,omc-reference,omc-setup,omc-teams,plan,project-session-manager,ralph,ralplan,release,remember,sciomc,self-improve,setup,skill,skillify,team,trace,ultraqa,ultrawork,verify,visual-verdict,writer-memory,",
-  "checked_at": "2026-04-05T20:38:01Z"
+  "skills": "AGENTS.md,ai-slop-cleaner,ask,autopilot,cancel,ccg,configure-notifications,debug,deep-dive,deep-interview,deepinit,external-context,hud,learner,mcp-setup,omc-doctor,omc-reference,omc-setup,omc-teams,plan,project-session-manager,ralph,ralplan,release,remember,sciomc,self-improve,setup,skill,skillify,team,trace,ultraqa,ultrawork,verify,visual-verdict,wiki,writer-memory,",
+  "checked_at": "2026-04-07T08:50:30Z"
 }
