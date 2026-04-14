@@ -1,6 +1,6 @@
 {
-  "version": "v4.11.5",
-  "bridge_hash": "319d621973d68e4a4bb539e4631a97e0ac950a12",
+  "version": "v4.11.6",
+  "bridge_hash": "205f124dbc5b881fcb1f147ee9782974492a97af",
   "skills": "AGENTS.md,ai-slop-cleaner,ask,autopilot,cancel,ccg,configure-notifications,debug,deep-dive,deep-interview,deepinit,external-context,hud,learner,mcp-setup,omc-doctor,omc-reference,omc-setup,omc-teams,plan,project-session-manager,ralph,ralplan,release,remember,sciomc,self-improve,setup,skill,skillify,team,trace,ultraqa,ultrawork,verify,visual-verdict,wiki,writer-memory,",
-  "checked_at": "2026-04-11T08:29:37Z"
+  "checked_at": "2026-04-14T09:07:47Z"
 }
