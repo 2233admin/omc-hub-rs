@@ -1,12 +1,27 @@
 # omc-hub-rs
 
+<!-- Badges -->
+[![GitHub Release](https://img.shields.io/github/v/release/2233admin/omc-hub-rs?include_prereleases&label=release)](https://github.com/2233admin/omc-hub-rs/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/2233admin/omc-hub-rs/CI.yml?branch=main)](https://github.com/2233admin/omc-hub-rs/actions)
+[![Rust](https://img.shields.io/badge/Rust-1.75+-orange.svg)](https://www.rust-lang.org)
+[![Binary Size](https://img.shields.io/github/size/2233admin/omc-hub-rs/artifact/omc-hub.exe?label=binary%20size)](https://github.com/2233admin/omc-hub-rs/releases)
+
 [English](#english) | [中文](#中文)
 
 ---
 
 <a id="english"></a>
 
-Lightweight MCP hub for Claude Code. Drop-in replacement for [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode)'s MCP backend — a 2.5MB Rust binary replacing 663MB of bun + haiku subprocess overhead.
+## TL;DR
+
+**Lightweight MCP hub for Claude Code.** Drop-in replacement for [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode)'s MCP backend — a **2.5MB Rust binary** replacing **763MB** of bun + haiku subprocess overhead.
+
+| Before | After |
+|--------|-------|
+| `node hub.mjs` — 84.5 MB | `omc-hub.exe` — **7.4 MB** |
+| Total: ~763 MB | Total: ~110 MB |
+| | **86% less memory** |
 
 ## The Problem
 
@@ -15,47 +30,42 @@ OMC's MCP infrastructure runs **three processes** just to provide tools to Claud
 ```
 bun (hub.mjs)           225 MB   MCP tool multiplexer (454 lines of JS)
 claude.exe --model haiku 438 MB   Full LLM subprocess for "skill matching"
-node (bridge)           ~100 MB   33 tools (state, notepad, LSP, etc.)
+node (bridge)            ~100 MB   33 tools (state, notepad, LSP, etc.)
 ────────────────────────────────
 Total                   ~763 MB   For JSON forwarding + file I/O + keyword lookup
 ```
 
 The haiku subprocess uses a **full Claude instance** (438MB) to match user input against ~50 keywords. That's a HashMap lookup.
 
-## The Fix
+## The Solution
 
+```mermaid
+graph LR
+    subgraph "Before (~763 MB)"
+        A1["bun hub.mjs<br/>225 MB"]
+        A2["claude haiku<br/>438 MB"]
+        A3["node bridge<br/>~100 MB"]
+    end
+
+    subgraph "After (~110 MB)"
+        B1["omc-hub.exe<br/>7.4 MB"]
+        B3["node bridge<br/>~100 MB"]
+    end
+
+    CC["Claude Code"]
+    CC --> A1
+    CC --> B1
+    CC --> B3
 ```
-                    Before                          After
-              ┌─────────────────┐           ┌─────────────────┐
-              │   bun (hub.mjs) │ 225 MB    │                 │
-              │   skill proxy   │           │  omc-hub-rs     │ 7.4 MB
-              ├─────────────────┤           │  26 tools       │
-              │ claude.exe      │ 438 MB    │  2.5 MB binary  │
-              │ haiku subprocess│           │                 │
-              ├─────────────────┤           ├─────────────────┤
-              │ node bridge     │ ~100 MB   │ node bridge     │ ~100 MB
-              │ 33 tools        │           │ 13 tools (LSP)  │
-              └─────────────────┘           └─────────────────┘
-              Total: ~763 MB                Total: ~110 MB (86% less)
-```
 
-| Component | Before | After | Savings |
-|-----------|--------|-------|---------|
-| Hub + skill proxy | 225 MB (bun) | 7.4 MB (Rust, measured) | 95.5% |
-| Skill matcher | 438 MB (haiku LLM) | 0 MB (HashMap) | 100% |
-| OMC native tools (20) | in node bridge | in Rust hub | moved |
-| Node bridge | 33 tools | 13 tools (LSP only) | 60% fewer |
-| Binary size | ~50 MB (node_modules) | 2.5 MB | 95% |
+### Memory Benchmark
 
-## Memory Benchmark
+Measured on Windows 11 (Ryzen 9800X3D), idle after startup:
 
-Measured on Windows 11 (Ryzen 9800X3D), idle after startup, no child MCP servers loaded:
-
-| Process | Working Set (RSS) |
-|---------|-------------------|
-| `node hub.mjs` (OMC default) | **84.5 MB** |
-| `omc-hub.exe` (this project) | **7.4 MB** |
-| **Reduction** | **11.4x less** |
+| Process | Working Set (RSS) | Reduction |
+|---------|-------------------|-----------|
+| `node hub.mjs` (OMC default) | **84.5 MB** | — |
+| `omc-hub.exe` (this project) | **7.4 MB** | **11.4x** |
 
 ```powershell
 # Reproduce
@@ -68,7 +78,9 @@ Start-Sleep 4; (Get-Process -Id $r.Id).WorkingSet64 / 1MB
 Stop-Process -Id $r.Id -Force
 ```
 
-## 26 Tools Included
+## Features
+
+### 26 Built-in Tools
 
 | Category | Tools | Count |
 |----------|-------|-------|
@@ -81,24 +93,48 @@ Stop-Process -Id $r.Id -Force
 | Session | search | 1 |
 | AST | ast_grep_search, ast_grep_replace (via sg CLI) | 2 |
 
-## Install
+### Architecture
 
-**Download binary** (recommended):
+```mermaid
+sequenceDiagram
+    participant CC as Claude Code
+    participant Hub as omc-hub-rs
+    participant Child as Child MCP
+    participant Bridge as node bridge
+
+    CC->>Hub: tools/call: hub_load_skill("my-skill")
+    Note over Hub: Scan skills/*.json<br/>Spawn child processes
+    Hub->>Child: initialize
+    Child-->>Hub: protocolVersion, capabilities
+    Hub->>Child: tools/list
+    Child-->>Hub: [tool1, tool2, ...]
+    Note over Hub: Register with namespace<br/>skill__my-skill__tool1
+    Hub-->>CC: {content: "loaded: true, tools: [...]"}
+
+    CC->>Hub: tools/call: skill__my-skill__file_search
+    Hub->>Child: tools/call: file_search
+    Child-->>Hub: {content: [...]}
+    Hub-->>CC: {content: [...]}
+```
+
+## Quick Start
+
+### 1. Download
 
 ```bash
 # Windows
-gh release download v0.2.0 --repo 2233admin/omc-hub-rs --pattern '*windows*'
+gh release download --repo 2233admin/omc-hub-rs --pattern '*windows*'
 
 # macOS (Apple Silicon)
-gh release download v0.2.0 --repo 2233admin/omc-hub-rs --pattern '*macos-aarch64*'
+gh release download --repo 2233admin/omc-hub-rs --pattern '*macos-aarch64*'
 
 # Linux
-gh release download v0.2.0 --repo 2233admin/omc-hub-rs --pattern '*linux-x86_64*'
+gh release download --repo 2233admin/omc-hub-rs --pattern '*linux-x86_64*'
 ```
 
-Or [download from Releases page](https://github.com/2233admin/omc-hub-rs/releases).
+Or [download from Releases](https://github.com/2233admin/omc-hub-rs/releases).
 
-**Build from source:**
+### 2. Build from Source
 
 ```bash
 git clone https://github.com/2233admin/omc-hub-rs.git
@@ -107,7 +143,7 @@ cargo build --release
 # Binary: target/release/omc-hub (.exe on Windows)
 ```
 
-## Setup
+### 3. Configure
 
 Add to `~/.claude/settings.json`:
 
@@ -126,41 +162,14 @@ The `--config` path points to your existing OMC mcp-hub directory (containing `s
 
 ## OMC Update Compatibility
 
-**omc-hub-rs survives OMC updates.** Here's why:
+**omc-hub-rs survives OMC updates.**
 
-- Our hub lives in `settings.json` under key `"omc-mcp-hub"`
-- OMC's bridge lives in plugin `.mcp.json` under key `"t"`
-- `omc update` only touches the plugin directory, never `settings.json`
-- Both servers run in parallel — 20 tools overlap harmlessly, LSP stays in node
+| Location | Key | Updated by |
+|----------|-----|------------|
+| `settings.json` | `"omc-mcp-hub"` | omc-hub-rs |
+| Plugin `.mcp.json` | `"t"` | `omc update` |
 
-When OMC releases a new version, check this repo for compatibility updates.
-
-## Architecture
-
-```
-Claude Code session
-    |
-    |-- "omc-mcp-hub" (settings.json)
-    |       |
-    |       v
-    |   omc-hub-rs (2.5MB Rust binary, 7.4MB runtime (measured))
-    |       |-- MCP JSON-RPC 2.0 stdio server
-    |       |-- Skill config loader (skills/*.json, lazy-load)
-    |       |-- Child MCP proxy (stdio + HTTP transports)
-    |       |-- Toolbox script runner (TOOLBOX_ACTION protocol)
-    |       |-- State / Notepad / Project Memory (file I/O)
-    |       |-- Trace / Session search
-    |       +-- AST grep (delegates to sg CLI)
-    |
-    |-- "t" (OMC plugin .mcp.json)
-    |       |
-    |       v
-    |   node bridge (~100MB, 13 tools)
-    |       |-- 12 LSP tools (hover, goto, refs, rename, diagnostics...)
-    |       +-- Python REPL (persistent state)
-    |
-    +-- other MCP servers (gitnexus, tavily, etc.)
-```
+`omc update` only touches the plugin directory, never `settings.json`. Both servers run in parallel — 20 tools overlap harmlessly, LSP stays in node.
 
 ## Verified
 
@@ -180,6 +189,11 @@ Claude Code session
 | Memory 7.4 MB runtime (measured) | PASS |
 | Binary < 3MB | PASS |
 
+## Documentation
+
+- [DEVELOPMENT.md](DEVELOPMENT.md) — Developer guide, architecture, testing
+- [CONTRIBUTING.md](CONTRIBUTING.md) — Contribution guidelines
+
 ## Related
 
 - [cli2skill](https://github.com/2233admin/cli2skill) — Convert any CLI or MCP server into an Agent Skill (zero process overhead)
@@ -195,7 +209,15 @@ MIT
 
 # omc-hub-rs (中文)
 
-Claude Code 的轻量级 MCP hub。替换 [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) 的 MCP 后端 — 用 2.5MB Rust 二进制替掉 663MB 的 bun + haiku 子进程。
+## 简介
+
+Claude Code 的轻量级 MCP hub。替换 [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) 的 MCP 后端 — 用 **2.5MB Rust 二进制**替掉 **763MB** 的 bun + haiku 子进程。
+
+| 替换前 | 替换后 |
+|--------|--------|
+| `node hub.mjs` — 84.5 MB | `omc-hub.exe` — **7.4 MB** |
+| 总计: ~763 MB | 总计: ~110 MB |
+| | **节省 86% 内存** |
 
 ## 问题
 
@@ -213,15 +235,37 @@ haiku 子进程用了一个**完整的 Claude 实例**（438MB）来匹配 ~50 �
 
 ## 解决方案
 
-| 组件 | 替换前 | 替换后 | 节省 |
-|------|--------|--------|------|
-| Hub + skill 代理 | 225 MB (bun) | 7.4 MB (Rust, measured) | 95.5% |
-| Skill 匹配器 | 438 MB (haiku LLM) | 0 MB (HashMap) | 100% |
-| OMC 原生工具 (20个) | 在 node bridge 里 | 在 Rust hub 里 | 迁移 |
-| Node bridge | 33 工具 | 13 工具 (仅LSP) | 少 60% |
-| 二进制大小 | ~50 MB (node_modules) | 2.5 MB | 95% |
+```mermaid
+graph LR
+    subgraph "替换前 (~763 MB)"
+        A1["bun hub.mjs<br/>225 MB"]
+        A2["claude haiku<br/>438 MB"]
+        A3["node bridge<br/>~100 MB"]
+    end
 
-## 包含 26 个工具
+    subgraph "替换后 (~110 MB)"
+        B1["omc-hub.exe<br/>7.4 MB"]
+        B3["node bridge<br/>~100 MB"]
+    end
+
+    CC["Claude Code"]
+    CC --> A1
+    CC --> B1
+    CC --> B3
+```
+
+### 内存基准测试
+
+在 Windows 11 (Ryzen 9800X3D) 上测量，空闲启动后：
+
+| 进程 | 工作集 (RSS) | 降低 |
+|------|-------------|------|
+| `node hub.mjs` (OMC 默认) | **84.5 MB** | — |
+| `omc-hub.exe` (本项目) | **7.4 MB** | **11.4 倍** |
+
+## 功能
+
+### 包含 26 个工具
 
 | 类别 | 工具 | 数量 |
 |------|------|------|
@@ -234,18 +278,33 @@ haiku 子进程用了一个**完整的 Claude 实例**（438MB）来匹配 ~50 �
 | Session 搜索 | search | 1 |
 | AST 语法树 | ast_grep_search/replace (通过 sg CLI) | 2 |
 
-## 安装
+## 快速开始
+
+### 1. 下载
 
 ```bash
-# 下载二进制（推荐）
-gh release download v0.2.0 --repo 2233admin/omc-hub-rs --pattern '*windows*'
+# Windows
+gh release download --repo 2233admin/omc-hub-rs --pattern '*windows*'
 
-# 或从源码编译
-git clone https://github.com/2233admin/omc-hub-rs.git
-cd omc-hub-rs && cargo build --release
+# macOS (Apple Silicon)
+gh release download --repo 2233admin/omc-hub-rs --pattern '*macos-aarch64*'
+
+# Linux
+gh release download --repo 2233admin/omc-hub-rs --pattern '*linux-x86_64*'
 ```
 
-## 配置
+或[从 Releases 页面下载](https://github.com/2233admin/omc-hub-rs/releases)。
+
+### 2. 从源码构建
+
+```bash
+git clone https://github.com/2233admin/omc-hub-rs.git
+cd omc-hub-rs
+cargo build --release
+# 二进制: target/release/omc-hub (.exe on Windows)
+```
+
+### 3. 配置
 
 在 `~/.claude/settings.json` 加入：
 
@@ -260,13 +319,47 @@ cd omc-hub-rs && cargo build --release
 }
 ```
 
-与 OMC 的 node bridge 共存，无需禁用任何东西。
+`--config` 路径指向你现有的 OMC mcp-hub 目录（包含 `skills/` 和 `toolbox/`）。这与 OMC 的 node bridge 共存，无需禁用任何东西。
 
 ## OMC 更新兼容
 
-**omc-hub-rs 不受 OMC 更新影响。** 我们的 hub 在 settings.json 里（key: `"omc-mcp-hub"`），OMC 的 bridge 在插件目录里（key: `"t"`）。`omc update` 只碰插件目录，不碰 settings.json。
+**omc-hub-rs 不受 OMC 更新影响。**
+
+| 位置 | Key | 由谁更新 |
+|------|-----|---------|
+| `settings.json` | `"omc-mcp-hub"` | omc-hub-rs |
+| 插件 `.mcp.json` | `"t"` | `omc update` |
+
+`omc update` 只碰插件目录，不碰 settings.json。两个服务器并行运行 — 20 个工具重叠无害，LSP 留在 node 里。
+
+## 验证通过
+
+| 测试 | 结果 |
+|------|------|
+| MCP initialize 握手 | PASS |
+| tools/list (26 工具) | PASS |
+| hub_list_skills (6 skill 配置) | PASS |
+| hub_stats | PASS |
+| Toolbox 脚本执行 | PASS |
+| state_list_active | PASS |
+| notepad_stats | PASS |
+| project_memory_read | PASS |
+| Skill 加载错误处理 | PASS |
+| ping / 心跳 | PASS |
+| 未知方法错误 (-32601) | PASS |
+| 内存 7.4 MB 运行时 (实测) | PASS |
+| 二进制 < 3MB | PASS |
+
+## 文档
+
+- [DEVELOPMENT.md](DEVELOPMENT.md) — 开发者指南, 架构, 测试
+- [CONTRIBUTING.md](CONTRIBUTING.md) — 贡献指南
 
 ## 相关项目
 
 - [cli2skill](https://github.com/2233admin/cli2skill) — 把任何 CLI 或 MCP server 转成 Agent Skill（零进程开销）
 - [OMC Issue #1878](https://github.com/Yeachan-Heo/oh-my-claudecode/issues/1878) — 内存占用报告 + benchmark 数据
+
+## 许可证
+
+MIT
