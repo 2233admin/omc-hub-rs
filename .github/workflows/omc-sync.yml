@@ -84,7 +84,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CHANGE_SUMMARY: ${{ steps.diff.outputs.summary }}
         run: |
-          EXISTING=$(gh issue list --label "omc-sync" --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
+          TITLE="OMC upstream changed -- compatibility check needed"
+
+          # Dedup on the stable title, not a label: the "omc-sync" label did not
+          # exist, so `gh issue create --label omc-sync` fell back to the unlabeled
+          # create and the label-filtered lookup below never matched -- a new
+          # duplicate issue was opened on every upstream bump.
+          EXISTING=$(gh issue list --state open --search "$TITLE in:title" --json number,title \
+            --jq "[.[] | select(.title == \"$TITLE\")][0].number" 2>/dev/null || echo "")
 
           BODY="OMC upstream has changed. Check compatibility with omc-hub-rs.
 
@@ -99,16 +106,17 @@ jobs:
           3. If skill format changed: verify config.rs parser handles new fields
           4. If version bumped: test full MCP handshake + tool calls"
 
+          # Ensure the dedup label exists so the issue is filterable next time.
+          gh label create "omc-sync" --color "0E8A16" \
+            --description "Automated OMC upstream compatibility tracking" 2>/dev/null || true
+
           if [ -n "$EXISTING" ]; then
+            # Issues opened before the label existed carry no label; apply it so
+            # label-filtered views actually include the tracked issue.
+            gh issue edit "$EXISTING" --add-label "omc-sync" 2>/dev/null || true
             gh issue comment "$EXISTING" --body "$BODY"
           else
-            gh issue create \
-              --title "OMC upstream changed -- compatibility check needed" \
-              --body "$BODY" \
-              --label "omc-sync" 2>/dev/null || \
-            gh issue create \
-              --title "OMC upstream changed -- compatibility check needed" \
-              --body "$BODY"
+            gh issue create --title "$TITLE" --body "$BODY" --label "omc-sync"
           fi
 
       - name: Commit tracking update
