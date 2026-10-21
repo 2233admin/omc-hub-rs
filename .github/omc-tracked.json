@@ -1,6 +1,6 @@
 {
-  "version": "v5.7.5",
-  "bridge_hash": "cad74eaab312daf2c082baf7dc7905c1069675e4",
+  "version": "v5.7.6",
+  "bridge_hash": "4ef3bb88f6515b51cd31c48a0bc65ceab8d4d33c",
   "skills": "AGENTS.md,agent-doc-discipline,ai-slop-cleaner,architecture-survey,ask,ask-navigator,autopilot,autoresearch,cancel,configure-notifications,debug,deep-interview,deepinit,diagram,drydock,execute,external-context,graph,harbor,hud,intent,launch,loft,map,minimal-code-discipline,minimal-prose-discipline,omc-doctor,omc-setup,plan,pr,project-session-manager,ralph,ralplan,refit,release,remember,research,review,self-improve,session-flow,skill,skillify,tdd,team,trace,ultragoal,verify,visual-verdict,wiki,",
-  "checked_at": "2026-10-18T12:13:00Z"
+  "checked_at": "2026-10-21T13:16:41Z"
 }
