@@ -1,6 +1,6 @@
 {
-  "version": "v5.8.8",
-  "bridge_hash": "a8632f80eb31b84da3f3e6ab5969ce0b11935021",
+  "version": "v5.8.9",
+  "bridge_hash": "91975fa41c6e529e20c919e78cf0a1145cbc02d5",
   "skills": "AGENTS.md,agent-doc-discipline,ai-slop-cleaner,architect,architecture-survey,arena,ask,ask-navigator,autopilot,autoresearch,babysit,benchmark-checklist,blast-radius,bro,cancel,configure-notifications,correct,create-formal-verification-skill,create-verification-skill,debug,deep-interview,deepinit,diagram,drydock,execute,external-context,figure-it-out,fix-ci,fix-merge-conflicts,get-pr-comments,graph,harbor,hillclimb,how,hud,in-your-own-words,intent,interrogate,ketchup,ketchup-video,launch,loft,maintain-formal-verification-skill,maintain-verification-skill,map,minimal-code-discipline,minimal-prose-discipline,models,omc-doctor,omc-setup,personal-mode,plan,pr,principles,project-session-manager,ralph,ralplan,recall,refit,reflect,release,remember,research,review,sdd,self-improve,session-flow,sharpen,show-me-your-work,skill,skillify,stacked-delivery,statechart,tdd,teach,team,technical-writing,trace,typescript-best-practices,ultragoal,verify,visual-verdict,what-did-i-get-done,why,wiki,",
-  "checked_at": "2026-11-25T18:14:01Z"
+  "checked_at": "2026-11-26T17:56:02Z"
 }
